@@ -1,27 +1,24 @@
-// Simple strand test for Adafruit Dot Star RGB LED strip.
-// This is a basic diagnostic tool, NOT a graphics demo...helps confirm
-// correct wiring and tests each pixel's ability to display red, green
-// and blue and to forward data down the line.  By limiting the number
-// and color of LEDs, it's reasonably safe to power a couple meters off
-// the Arduino's 5V pin.  DON'T try that with other code!
 
+#include <avr/pgmspace.h>
 #include <Adafruit_DotStar.h>
 #include <SPI.h>
 #include <RFduinoBLE.h>
 
-#define NUMPIXELS 144 // Number of LEDs in strip
+#define NUMPIXELS 144
 
-// Here's how to control the LEDs from any two pins:
-#define DATAPIN    5
-#define CLOCKPIN   6
+#define DATAPIN    5 //the green wire
+#define CLOCKPIN   6 //the yellow wire
 Adafruit_DotStar strip = Adafruit_DotStar(NUMPIXELS, DATAPIN, CLOCKPIN);
-uint32_t color = 0xFF0000;      // 'On' color (starts red)
+#define FLASH_PAGE  249
+uint32_t *color = ADDRESS_OF_PAGE(FLASH_PAGE);
+uint32_t current_color = *color;
 
 // Hardware SPI is a little faster, but must be wired to specific pins
 // (Arduino Uno = pin 11 for data, 13 for clock, other boards are different).
 //Adafruit_DotStar strip = Adafruit_DotStar(NUMPIXELS);
 
 void setup() {
+  Serial.begin(9600);
 
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000L)
   clock_prescale_set(clock_div_1); // Enable 16 MHz on Trinket
@@ -31,9 +28,15 @@ void setup() {
   strip.show();  // Turn all LEDs off ASAP
 
   // start the BLE stack
+  RFduinoBLE.deviceName = "Kitchen Light";
   RFduinoBLE.advertisementData = "rgb";
   RFduinoBLE.begin();
-  RFduinoBLE_onReceive("", 0);
+
+  if (current_color == 0) {
+    current_color = 0xFFFFFF;
+    save(current_color);
+  }
+  RFduinoBLE_onReceive("",0);
 }
 
 // Runs 10 LEDs at a time along strip, cycling through red, green and blue.
@@ -43,22 +46,51 @@ void setup() {
 void loop() {
   // switch to lower power mode
   RFduino_ULPDelay(INFINITE);
+}
 
+void save(uint32_t new_color) {
+  int rc = flashPageErase(FLASH_PAGE);
+  if (rc == 0)
+    Serial.println("Success");
+  else if (rc == 1)
+    Serial.println("Error - the flash page is reserved");
+  else if (rc == 2)
+    Serial.println("Error - the flash page is used by the sketch");
+  rc = flashWrite(color, new_color);
+  if (rc == 0)
+    Serial.println("Success");
+  else if (rc == 1)
+    Serial.println("Error - the flash page is reserved");
+  else if (rc == 2)
+    Serial.println("Error - the flash page is used by the sketch");
 }
 
 
 void RFduinoBLE_onReceive(char *data, int len) {
   // each transmission should contain an RGB triple
+
   if (len >= 3)
   {
     // get the RGB values
     uint32_t r = data[0];
     uint32_t g = data[1];
     uint32_t b = data[2];
-    color = (r << 16) + (g << 8) + b;
+    Serial.println(r, HEX);
+    Serial.println(g, HEX);
+    Serial.println(b, HEX);
+    current_color = (r << 16) + (g << 8) + b;
+    Serial.println("COLOR CHANGE");
+    Serial.println(current_color, HEX);
+    save(current_color);
   }
+  Serial.println("COLOR DISPLAY");
+  Serial.println(current_color, HEX);
   for (int i=0; i < NUMPIXELS; i++) {
-    strip.setPixelColor(i, color);
+    strip.setPixelColor(i, current_color);
+    //semi-animation -- show the strip every five lights
+    if (i%10 == 0) {
+      strip.show();
+    }
   }
   strip.show();
 
