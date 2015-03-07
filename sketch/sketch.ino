@@ -6,8 +6,8 @@
 
 #define NUMPIXELS 144
 
-#define DATAPIN    5 //the green wire
-#define CLOCKPIN   6 //the yellow wire
+#define DATAPIN    2 //the green wire
+#define CLOCKPIN   3 //the yellow wire
 Adafruit_DotStar strip = Adafruit_DotStar(NUMPIXELS, DATAPIN, CLOCKPIN);
 #define FLASH_PAGE  249
 uint32_t *color = ADDRESS_OF_PAGE(FLASH_PAGE);
